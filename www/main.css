@@ -1,0 +1,12 @@
+body, h1, h2, h3, h4, h5, h6, p, table, tr, td, ul, li { 
+font-family: arial, helvetica, geneva, sans-serif; 
+background-color: #FFFFFF; 
+color: #000066; 
+} 
+body { margin: 0 .5em 0 .5em; }
+h1 { font-size: 2em; margin-top: .5em; margin-bottom: 0; }
+h2 { font-size: 1.5em; margin-top: 1.1em; margin-bottom: 0; }
+h3 { font-size: 1.15em; margin-bottom: 0; }
+.navcell { border: solid thin #000066; padding: 8px; background-color: #ded5c4}
+.navcell P { background-color: #ded5c4; }
+.rightcell div.mainblock { margin-left: 20px; } 
