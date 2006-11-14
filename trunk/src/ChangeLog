@@ -17,9 +17,14 @@ for more info.
     regtest-run.sh:
     * lower priority of ssh with 'nice'.  This really reduces the CPU load.
 
+    demo-CPU.sh:
+    * add generate-demo.pl to generate demo-CPU.sh from buildlogs/all.dats.txt.
+
     doc:
     * updated mac os x section of crosstool-howto.html to include tips
       on wrapping ld and as
+    * add "Target Platform Notes" to crosstool-howto.html to include the target
+      platform specific notes for building crosstool using demo-CPU.sh.
 
 0.41:
     crosstool.sh:
