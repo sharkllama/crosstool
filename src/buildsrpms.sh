@@ -37,7 +37,7 @@ gcc-4.0.2-glibc-2.3.5 \
 "}
 
 # I prefer /opt/crosstool, but rpmlint objects less to /usr/crosstool
-RESULT_TOP=/usr/crosstool
+RESULT_TOP=${RESULT_TOP-/usr/crosstool}
 test -f crosstool.sh && abort "Don't run this inside the crosstool directory!"
 test -f crosstool-$CROSSTOOLVERSION.tar.gz || abort "Can't find crosstool-$CROSSTOOLVERSION.tar.gz"
 test -f crosstool-$CROSSTOOLVERSION/crosstool.sh || abort "Can't find crosstool-$CROSSTOOLVERSION/crosstool.sh; please unpack crosstool-$CROSSTOOLVERSION.tar.gz"
