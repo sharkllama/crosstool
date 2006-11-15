@@ -678,8 +678,8 @@ cd $PREFIX
 sh $TOP_DIR/masq.sh
 
 # Make it easier to run apps built with new gcc on systems that don't
-# have the libgcc_s.so or libstdc++.so installed, by creating 
-# directories containing a copy of libgcc_s.so and libstdc++.so alone.
+# have the libgcc_s.so or libstdc++.so, libssp.so, or libmudflap.so installed, by creating 
+# directories containing a copy of libgcc_s.so, libstdc++.so, libssp.so and libmudflap.so alone.
 cd $TOP_DIR
 sh mkoverride.sh
 
