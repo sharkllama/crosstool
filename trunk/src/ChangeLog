@@ -18,6 +18,8 @@ for more info.
       and cpu.dat, or it might be defined by a crosstool user, who added
       a definition to GLIBC_EXTRA_CONFIG. Before this buf fix, whichever came
       first would have been overwritten.
+    * add gcc-4.1.1-glibc-2.3.5-nptl.dat as Ian's first cut at simple
+      way of enabling NPTL.
 
     gdb:
     * add gdb-6.5 final
