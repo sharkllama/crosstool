@@ -44,7 +44,7 @@ _EOF_
 
 # These should match the lib* subpackages in the crosstool-gcc specfile
 # FIXME: Include more shared libraries, like java and fortran
-LIBS="libgcc_s.so libstdc++.so"
+LIBS="libgcc_s.so libstdc++.so libssp.so libmudflap.so"
 
 for LIB in $LIBS; do
   # We don't know where the library is, so search.

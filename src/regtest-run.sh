@@ -85,6 +85,18 @@ gcc-4.1.0-glibc-2.3.5 \
 gcc-4.1.0-glibc-2.3.5-tls \
 gcc-4.1.0-glibc-2.3.6 \
 gcc-4.1.0-glibc-2.3.6-tls \
+gcc-4.1.1-glibc-2.2.2 \
+gcc-4.1.1-glibc-2.3.2 \
+gcc-4.1.1-glibc-2.3.5 \
+gcc-4.1.1-glibc-2.3.5-tls \
+gcc-4.1.1-glibc-2.3.6 \
+gcc-4.1.1-glibc-2.3.6-tls \
+gcc-4.2-glibc-2.2.2 \
+gcc-4.2-glibc-2.3.2 \
+gcc-4.2-glibc-2.3.5 \
+gcc-4.2-glibc-2.3.5-tls \
+gcc-4.2-glibc-2.3.6 \
+gcc-4.2-glibc-2.3.6-tls \
 "
 
 
