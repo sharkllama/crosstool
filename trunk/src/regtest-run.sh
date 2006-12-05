@@ -20,7 +20,7 @@ set -x
 mkdir -p jobdir
 
 # Which version of crosstool to test
-CROSSTOOL=crosstool-0.42
+CROSSTOOL=crosstool-0.43
 
 # Edit this line to specify the hosts to run the script on
 #ALLNODES="k8 fast fast2"
