@@ -31,6 +31,17 @@ for more info.
       is to modify fix-embedded-paths.c to use slash padding rather than space or
       null padding, and run it again on the affected libraries.
 
+    crosstool.spec.in:
+    buildsrpms.sh:
+    * add __PKGPREFIX__ to allow users to specify the name prefix of the rpms.
+    * change the version number to 0.43
+
+    buildlogs:
+    * add gcc-4.1.1 build results and update build matrix.
+
+    regtest-report.sh:
+    * add nptl to build matrix
+
 0.42:
     gcc:
     * add gcc-4.1.0 final, remove snapshots
