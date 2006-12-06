@@ -1,5 +1,6 @@
 # This specfile expanded by crosstool's buildsrpms.sh.
-# This should have had the following five keywords expanded,
+# This should have had the following six keywords expanded,
+# __PKGPREFIX__
 # __CROSSTOOLVERSION__
 # __RESULT_TOP__
 # __CPUS__
@@ -10,6 +11,7 @@
 #%trace
 
 # parameters
+%define PKGPREFIX           __PKGPREFIX__
 %define TOOLCOMBO           __TOOLCOMBO__
 %define RESULT_TOP          __RESULT_TOP__
 
@@ -31,7 +33,7 @@ __FOR __CPU__ __CPUS__
 %{expand:%%define CPUS %{CPUS} %{?_with___CPU__: __CPU__}}
 __ENDFOR
 
-%define Name                crosstool-%{TOOLCOMBO}
+%define Name                %{PKGPREFIX}-%{TOOLCOMBO}
 %define Version             __CROSSTOOLVERSION__
 %define Release             1
 %define crosstool_pkg       crosstool-__CROSSTOOLVERSION__.tar.gz
