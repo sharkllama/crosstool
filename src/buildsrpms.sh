@@ -21,6 +21,7 @@ set -ex
 #FIXME: CROSSTOOLVERSION needs to be updated every time crosstool's version changes, ewww
 CROSSTOOLVERSION=0.43
 PKGPREFIX=${PKGPREFIX:-"crosstool"}
+PKGRELEASE=${PKGRELEASE:-"1"}
 
 # Edit this line to specify which toolchain combos to build specfiles for
 # Or override the environment variable (see rerpm.sh for example)
@@ -95,7 +96,7 @@ for TOOLCOMBO in $TOOLCOMBOS; do
     abort "No CPUs supported for this toolcombo?"
   fi
   cat crosstool-$CROSSTOOLVERSION/crosstool.spec.in |
-   sed "s,__PKGPREFIX__,$PKGPREFIX,g;s,__TOOLCOMBO__,$TOOLCOMBO,g;s,__RESULT_TOP__,$RESULT_TOP,g;s,__CPUS__,$CPUS,g;s,__CROSSTOOLVERSION__,$CROSSTOOLVERSION,g"  |
+   sed "s,__PKGPREFIX__,$PKGPREFIX,g;s,__PKGRELEASE__,$PKGRELEASE,g;s,__TOOLCOMBO__,$TOOLCOMBO,g;s,__RESULT_TOP__,$RESULT_TOP,g;s,__CPUS__,$CPUS,g;s,__CROSSTOOLVERSION__,$CROSSTOOLVERSION,g"  |
    sed "$HAVE_SHAREDLIBS" |
    sed "/__SOURCES__/c\\
 $SOURCES

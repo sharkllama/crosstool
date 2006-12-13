@@ -1,6 +1,7 @@
 # This specfile expanded by crosstool's buildsrpms.sh.
-# This should have had the following six keywords expanded,
+# This should have had the following seven keywords expanded,
 # __PKGPREFIX__
+# __PKGRELEASE__
 # __CROSSTOOLVERSION__
 # __RESULT_TOP__
 # __CPUS__
@@ -14,6 +15,7 @@
 %define PKGPREFIX           __PKGPREFIX__
 %define TOOLCOMBO           __TOOLCOMBO__
 %define RESULT_TOP          __RESULT_TOP__
+%define PKGRELEASE          __PKGRELEASE__
 
 # Strange rule to make us fit Fedora's rule of needing to buld without flags.
 # If --without all is not given, build everything.
@@ -35,7 +37,7 @@ __ENDFOR
 
 %define Name                %{PKGPREFIX}-%{TOOLCOMBO}
 %define Version             __CROSSTOOLVERSION__
-%define Release             1
+%define Release             %{PKGRELEASE}
 %define crosstool_pkg       crosstool-__CROSSTOOLVERSION__.tar.gz
 %define summary             %{TOOLCOMBO} cross compiler
 %define __os_install_post %{nil} 
