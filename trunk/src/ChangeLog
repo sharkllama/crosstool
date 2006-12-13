@@ -2,6 +2,12 @@ Note: a description of why each patch is needed is embedded
 *inside* the patch file at the top, so read the patch file
 for more info.
 
+0.44-pre:
+    crosstool.spec.in:
+    buildsrpms.sh:
+    * add __PKGRELEASE__ to allow users to specify the build number of
+      rpms. The default value is 1.
+
 0.43:
     gcc:
     * add gcc-4.1.1 final
