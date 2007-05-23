@@ -68,17 +68,26 @@ TOP_DIR=${TOP_DIR-`pwd`}
 chmod 755 $TOP_DIR/config.guess
 BUILD=${GCC_BUILD-`$TOP_DIR/config.guess`}
 test -z "$BUILD" && abort "bug: BUILD not set?!"
-
+test -n "`echo $GLIBCTHREADS_FILENAME | grep linuxthreads`" && GLIBC_ADDON_LINUXTHREADS=1
+test -n "`echo $GLIBCTHREADS_FILENAME | grep nptl`" && GLIBC_ADDON_NPTL=1
 if test -z "${GLIBC_ADDON_OPTIONS}"; then
-   echo "GLIBC_ADDON_OPTIONS not set, so guessing addons from GLIBCTHREADS_FILENAME and GLIBCCRYPT_FILENAME"
-   # this is lame, need to fix this for nptl later?
-   # (nptl is an addon, but it's shipped in the main tarball)
+   echo "GLIBC_ADDON_OPTIONS not set"
    GLIBC_ADDON_OPTIONS="="
-   case "${GLIBCTHREADS_FILENAME}" in
-     *linuxthreads*) GLIBC_ADDON_OPTIONS="${GLIBC_ADDON_OPTIONS}linuxthreads," ;;
-   esac
+   if test '!' -z ${GLIBC_ADDON_LINUXTHREADS}; then
+       GLIBC_ADDON_OPTIONS="${GLIBC_ADDON_OPTIONS}linuxthreads,"
+       # crypt is only an addon for glibc-2.1.x
+       test -z "${GLIBCCRYPT_FILENAME}"   || GLIBC_ADDON_OPTIONS="${GLIBC_ADDON_OPTIONS}crypt,"
+   elif test '!' -z ${GLIBC_ADDON_NPTL}; then
+       GLIBC_ADDON_OPTIONS="${GLIBC_ADDON_OPTIONS}nptl"
+   else
+       GLIBC_ADDON_OPTIONS="${GLIBC_ADDON_OPTIONS}no"
+   fi
    # crypt is only an addon for glibc-2.1.x
    test -z "${GLIBCCRYPT_FILENAME}"   || GLIBC_ADDON_OPTIONS="${GLIBC_ADDON_OPTIONS}crypt,"
+else
+  if test $GLIBC_ADDON_OPTIONS = "=nptl" ; then
+    GLIBC_ADDON_NPTL=1
+  fi
 fi
 
 # Add some default glibc config options if not given by user.  These used to be hardcoded.
@@ -98,10 +107,12 @@ esac
 
 # One is forbidden
 test -z "${LD_LIBRARY_PATH}" || abort  "glibc refuses to build if LD_LIBRARY_PATH is set.  Please unset it before running this script."
+if test '!' -z "${GLIBC_ADDON_NPTL}"; then
+    GLIBC_EXTRA_CONFIG="--with-tls --with-__thread ${GLIBC_EXTRA_CONFIG}"
+else
+    GLIBC_EXTRA_CONFIG="--without-tls --without-__thread ${GLIBC_EXTRA_CONFIG}"
+fi
 
-# And one is derived if unset.
-test -z "${GLIBCTHREADS_FILENAME}" &&
-GLIBCTHREADS_FILENAME=`echo $GLIBC_DIR | sed 's/glibc-/glibc-linuxthreads-/'`
 
 # Check for a few prerequisites that have tripped people up.
 awk '/x/' < /dev/null  || abort "You need awk to build a toolchain."
@@ -172,9 +183,9 @@ echo "End saving environment"
 
 #---------------------------------------------------------
 
+UNIQUE_BUILD=`echo $BUILD | sed s/-/-build_/`
 if test "$GCC_HOST" != ""; then
         # Modify $BUILD so gcc never, ever thinks $build = $host
-        UNIQUE_BUILD=`echo $BUILD | sed s/-/-build_/`
         CANADIAN_BUILD="--build=$UNIQUE_BUILD"
         echo "canadian cross, configuring gcc & binutils with $CANADIAN_BUILD"
         # make sure we have a host compiler (since $GCC_HOST-gcc won't work)
@@ -204,7 +215,6 @@ case "$GCC_HOST,$CANADIAN_BUILD," in
 *cygwin*,?*,) ;;
 *)            GCC_HOST=`echo $GCC_HOST | sed s/-/-host_/` ;;
 esac
-
 
 # If we're building compilers that run on Windows, remember that their
 # filenames end in .exe
@@ -311,7 +321,7 @@ fi
 
 cd $LINUX_HEADER_DIR
 mkdir -p $HEADERDIR
-
+INSTALL_HEADERS_DIR=`echo $HEADERDIR | sed 's/include//'`
 # no indentation for now because indentation levels are rising too high
 if test -z "$LINUX_SANITIZED_HEADER_DIR" ; then
 
@@ -325,6 +335,11 @@ fi
 # autodetect kernel version from contents of Makefile
 KERNEL_VERSION=`awk '/^VERSION =/ { print $3 }' $LINUX_HEADER_DIR/Makefile`
 KERNEL_PATCHLEVEL=`awk '/^PATCHLEVEL =/ { print $3 }' $LINUX_HEADER_DIR/Makefile`
+KERNEL_SUBLEVEL=`awk '/^SUBLEVEL =/ { print $3 }' $LINUX_HEADER_DIR/Makefile`
+if test "$KERNEL_VERSION.$KERNEL_PATCHLEVEL" = "2.6" && test KERNEL_SUBLEVEL -ge 18 ; then
+   make ARCH=$ARCH INSTALL_HDR_PATH=$INSTALL_HEADERS_DIR headers_check
+   make ARCH=$ARCH INSTALL_HDR_PATH=$INSTALL_HEADERS_DIR headers_install
+else
 
 case "$KERNEL_VERSION.$KERNEL_PATCHLEVEL.x" in
 2.2.x|2.4.x) make ARCH=$ARCH symlinks    include/linux/version.h
@@ -351,7 +366,7 @@ case "$KERNEL_VERSION.$KERNEL_PATCHLEVEL.x" in
 *)           abort "Unsupported kernel version $KERNEL_VERSION.$KERNEL_PATCHLEVEL"
 esac
 cp -r include/asm-generic $HEADERDIR/asm-generic
-
+fi # [ KERNEL_SUBLEVEL -ge 18 ]
 fi # test -z "$LINUX_SANITIZED_HEADER_DIR"
 
 cp -r include/linux $HEADERDIR
@@ -390,7 +405,42 @@ cd ..
 
 # test to see if this step passed
 logresult binutils ${PREFIX}/bin/${TARGET}-ld${EXEEXT}
+if test '!' -z ${GLIBC_ADDON_NPTL}; then
+#---------------------------------------------------------
+echo "Build gcc-core w/o shared libgcc (just enough to build glibc startfiles)"
 
+mkdir -p build-gcc-core-static; cd build-gcc-core-static
+
+echo Copy headers to install area of bootstrap gcc, so it can build libgcc2
+mkdir -p $CORE_PREFIX/$TARGET/include
+cp -r $HEADERDIR/* $CORE_PREFIX/$TARGET/include
+
+# Use --with-local-prefix so older gccs don't look in /usr/local (http://gcc.gnu.org/PR10532)
+# Use funky prefix so it doesn't contaminate real prefix, in case GCC_DIR != GCC_CORE_DIR
+
+if test '!' -f Makefile; then
+    ${GCC_CORE_DIR}/configure $CANADIAN_BUILD --target=$TARGET --host=$GCC_HOST --prefix=$CORE_PREFIX \
+        --with-local-prefix=${SYSROOT} \
+        --disable-multilib \
+        --with-newlib \
+        ${GCC_EXTRA_CONFIG} \
+        ${GCC_SYSROOT_ARG_CORE} \
+        --disable-nls \
+        --enable-threads=no \
+        --enable-symvers=gnu \
+        --enable-__cxa_atexit \
+        --enable-languages=c \
+        --disable-shared
+fi
+
+test "$CANADIAN_BUILD" = "" || make $PARALLELMFLAGS all-build-libiberty || true
+make $PARALLELMFLAGS all-gcc
+make install-gcc
+
+cd ..
+
+logresult gcc-core $CORE_PREFIX/bin/${TARGET}-gcc${EXEEXT}
+fi #test '!' -z ${GLIBC_ADDON_NPTL}; then
 #---------------------------------------------------------
 echo "Install glibc headers needed to build bootstrap compiler -- but only if gcc-3.x"
 
@@ -416,8 +466,20 @@ if grep -q 'gcc-[34]' ${GCC_CORE_DIR}/ChangeLog && test '!' -f $HEADERDIR/featur
         # is ok here, since all we want are the basic headers at this point.
         # Override libc_cv_ppc_machine so glibc-cvs doesn't complain
         # 'a version of binutils that supports .machine "altivec" is needed'.
+        case `basename ${GLIBC_DIR}` in
+          glibc-2.3.*)
+            THECC=gcc
+            ;;
+          *)
+            THECC=${TARGET}-gcc${EXEEXT}
+            ;;
+        esac
+
         libc_cv_ppc_machine=yes \
-        CC=gcc \
+        libc_cv_forced_unwind=yes \
+        libc_cv_c_cleanup=yes \
+        BUILD_CC=gcc \
+        CC=${THECC} \
             ${GLIBC_DIR}/configure --prefix=/usr \
             --build=$BUILD --host=$TARGET \
             --without-cvs --disable-sanity-checks --with-headers=$HEADERDIR \
@@ -463,13 +525,47 @@ if grep -q 'gcc-[34]' ${GCC_CORE_DIR}/ChangeLog && test '!' -f $HEADERDIR/featur
     # so uncomment this if you need it
     #cp misc/syscall-list.h $HEADERDIR/bits/syscall.h
 
+    if test '!' -z "${GLIBC_ADDON_NPTL}"; then
+        # To build gcc with thread support requires real pthread headers. These
+        # will have to manually be copied from under the tree of the desired
+        # target pthread implementation.
+        cp ${GLIBC_DIR}/nptl/sysdeps/pthread/pthread.h $HEADERDIR/pthread.h
+        pthreadtypes_h=nptl/sysdeps/unix/sysv/linux/${ARCH}/bits/pthreadtypes.h
+
+        # On s390, powerpc and sparc we also require bits/wordsize.h.
+        case $TARGET in
+        sparc* | s390* | powerpc* )
+            case $TARGET in
+            sparc64* )   wordsize_h=sysdeps/sparc/sparc64/bits/wordsize.h
+                         pthreadtypes_h=nptl/sysdeps/unix/sysv/linux/sparc/bits/pthreadtypes.h
+                         ;;
+            sparc* )     wordsize_h=sysdeps/sparc/sparc32/bits/wordsize.h
+                         pthreadtypes_h=nptl/sysdeps/unix/sysv/linux/sparc/bits/pthreadtypes.h
+                         ;;
+            s390x* )     wordsize_h=sysdeps/s390/s390x/bits/wordsize.h
+                         ;;
+            s390* )      wordsize_h=sysdeps/s390/s390/bits/wordsize.h
+                         ;;
+            powerpc64* ) wordsize_h=sysdeps/powerpc/powerpc64/bits/wordsize.h
+                         pthreadtypes_h=nptl/sysdeps/unix/sysv/linux/powerpc/bits/pthreadtypes.h
+                         ;;
+            powerpc* )   wordsize_h=sysdeps/powerpc/powerpc32/bits/wordsize.h
+                         pthreadtypes_h=nptl/sysdeps/unix/sysv/linux/powerpc/bits/pthreadtypes.h
+                         ;;
+            esac
+            test ! -f $HEADERDIR/bits/wordsize.h && cp ${GLIBC_DIR}/${wordsize_h} $HEADERDIR/bits/wordsize.h
+            cp ${GLIBC_DIR}/${pthreadtypes_h} $HEADERDIR/bits/pthreadtypes.h
+            ;;
+        esac
+    fi # GLIBC_ADDONS_NPTL
+
     cd ..
 fi
-
+if test '!' -z ${GLIBC_ADDON_LINUXTHREADS}; then
 #---------------------------------------------------------
-echo "Build gcc-core (just enough to build glibc)"
+echo "Build gcc-core w/o shared libgcc (just enough to build glibc startfiles)"
 
-mkdir -p build-gcc-core; cd build-gcc-core
+mkdir -p build-gcc-core-static; cd build-gcc-core-static
 
 echo Copy headers to install area of bootstrap gcc, so it can build libgcc2
 mkdir -p $CORE_PREFIX/$TARGET/include
@@ -500,15 +596,140 @@ make install-gcc
 cd ..
 
 logresult gcc-core $CORE_PREFIX/bin/${TARGET}-gcc${EXEEXT}
+fi #test '!' -z ${GLIBC_ADDON_LINUXTHREADS}; then
 
+# Following extra steps required for building an NPTL enabled glibc.
+if test '!' -z "${GLIBC_ADDON_NPTL}"; then
+    #---------------------------------------------------------
+    echo "Build glibc startfiles (required for shared libgcc)"
+
+    mkdir -p build-glibc-startfiles; cd build-glibc-startfiles
+
+    # sh4 really needs to set configparms as of gcc-3.4/glibc-2.3.2
+    # note: this is awkward, doesn't work well if you need more than one line in configparms
+    echo ${GLIBC_CONFIGPARMS} > configparms
+
+    echo "libc_cv_forced_unwind=yes" > config.cache
+    echo "libc_cv_c_cleanup=yes" >> config.cache
+    # this here is moot, currently you cannot build nptl for sparc64
+    case ${TARGET} in
+        sparc64* ) echo "libc_cv_sparc64_tls=yes" >> config.cache ;;
+    esac
+
+    if test '!' -f Makefile; then
+        # Configure with --prefix the way we want it on the target...
+        # There are a whole lot of settings here.  You'll probably want
+        # to read up on what they all mean, and customize a bit.
+        # Compare these options with the ones used when installing the glibc headers above - they're different.
+        # Adding "--without-gd" option to avoid error "memusagestat.c:36:16: gd.h: No such file or directory"
+        # See also http://sources.redhat.com/ml/libc-alpha/2000-07/msg00024.html.
+        # Set BUILD_CC, or you won't be able to build datafiles
+        # Set --build, else glibc-2.3.2 will think you're not cross-compiling, and try to run the test programs
+        # Pass $UNIQUE_BUILD as --build to make glibc never think --host and --build
+        # the same.
+
+        BUILD_CC=gcc CFLAGS="$TARGET_CFLAGS" CC="${TARGET}-gcc $GLIBC_EXTRA_CC_ARGS" \
+        AR=${TARGET}-ar RANLIB=${TARGET}-ranlib \
+            ${GLIBC_DIR}/configure --prefix=/usr \
+            --build=$UNIQUE_BUILD --host=$TARGET \
+            ${GLIBC_EXTRA_CONFIG} \
+            --without-cvs --disable-profile --disable-debug --without-gd \
+            $SHARED_MODE \
+            --enable-add-ons${GLIBC_ADDON_OPTIONS} --with-headers=$HEADERDIR \
+            --cache-file=config.cache
+    fi
+
+    #TODO: should check whether slibdir has been set in configparms to */lib64
+    #      and copy the startfiles into the appropriate libdir.
+    make csu/subdir_lib
+
+    test -z "${USE_SYSROOT}" &&
+    cp -fp csu/crt[1in].o ${SYSROOT}/lib/ ||
+    cp -fp csu/crt[1in].o ${SYSROOT}/usr/lib/
+
+    cd ..
+
+    #---------------------------------------------------------
+    echo "Build gcc-core w shared libgcc"
+
+    mkdir -p build-gcc-core-shared; cd build-gcc-core-shared
+
+    # Use --with-local-prefix so older gccs don't look in /usr/local (http://gcc.gnu.org/PR10532)
+
+    if test '!' -f Makefile; then
+        ${GCC_DIR}/configure $CANADIAN_BUILD --target=$TARGET --host=$GCC_HOST --prefix=$PREFIX \
+            --with-local-prefix=${SYSROOT} \
+            --disable-multilib \
+            ${GCC_EXTRA_CONFIG} \
+            ${GCC_SYSROOT_ARG_CORE} \
+            --disable-nls \
+            --enable-symvers=gnu \
+            --enable-__cxa_atexit \
+            --enable-languages=c \
+            --enable-shared
+    fi
+
+    # HACK: we need to override SHLIB_LC from gcc/config/t-slibgcc-elf-ver or
+    #       gcc/config/t-libunwind so -lc is removed from the link for
+    #       libgcc_s.so, as we do not have a target -lc yet.
+    #       This is not as ugly as it appears to be ;-) All symbols get resolved
+    #       during the glibc build, and we provide a proper libgcc_s.so for the
+    #       cross toolchain during the final gcc build.
+    #
+    #       As we cannot modify the source tree, nor override SHLIB_LC itself
+    #       during configure or make, we have to edit the resultant
+    #       gcc/libgcc.mk itself to remove -lc from the link.
+    #       This causes us to have to jump through some hoops...
+    #
+    #       To produce libgcc.mk to edit we firstly require libiberty.a,
+    #       so we configure then build it.
+    #       Next we have to configure gcc, create libgcc.mk then edit it...
+    #       So much easier if we just edit the source tree, but hey...
+    if test '!' -f ${GCC_DIR}/gcc/BASE-VER; then
+        make configure-libiberty
+        make -C libiberty libiberty.a
+        make configure-gcc
+        make configure-libcpp
+        make all-libcpp
+    else
+        make configure-gcc
+        make configure-libcpp
+        make configure-build-libiberty
+        make all-libcpp
+        make all-build-libiberty
+    fi
+    make -C gcc libgcc.mk
+
+    if test '!' -f gcc/libgcc.mk-ORIG ; then cp -p gcc/libgcc.mk gcc/libgcc.mk-ORIG; fi
+    sed 's@-lc@@g' < gcc/libgcc.mk-ORIG > gcc/libgcc.mk
+
+    test "$CANADIAN_BUILD" = "" || make $PARALLELMFLAGS all-build-libiberty || true
+    make $PARALLELMFLAGS all-gcc
+    make install-gcc
+
+    cd ..
+
+    test -x ${PREFIX}/bin/${TARGET}-gcc || abort Build failed during gcc-core
+
+fi # GLIBC_ADDON_NPTL
 #---------------------------------------------------------
-echo Build glibc and linuxthreads
+echo Build glibc
 
 mkdir -p build-glibc; cd build-glibc
 
 # sh4 really needs to set configparms as of gcc-3.4/glibc-2.3.2
 # note: this is awkward, doesn't work well if you need more than one line in configparms
 echo ${GLIBC_CONFIGPARMS} > configparms
+
+if test '!' -z "${GLIBC_ADDON_NPTL}"; then
+    # Following configure tests fail while cross-compiling
+    echo "libc_cv_forced_unwind=yes" > config.cache
+    echo "libc_cv_c_cleanup=yes" >> config.cache
+    # The following is moot, currently you cannot build nptl for sparc64
+    case ${TARGET} in
+        sparc64* ) echo "libc_cv_sparc64_tls=yes" >> config.cache ;;
+    esac
+fi # GLIBC_ADDON_NPTL
 
 if test '!' -f Makefile; then
     # Configure with --prefix the way we want it on the target...
@@ -529,14 +750,17 @@ if test '!' -f Makefile; then
 	export libc_cv_forced_unwind libc_cv_c_cleanup
     fi
 
+    # Pass $UNIQUE_BUILD as --build to make glibc never think --host and --build
+    # the same.
     BUILD_CC=gcc CFLAGS="$TARGET_CFLAGS $EXTRA_TARGET_CFLAGS" CC="${TARGET}-gcc $GLIBC_EXTRA_CC_ARGS" \
     AR=${TARGET}-ar RANLIB=${TARGET}-ranlib \
         ${GLIBC_DIR}/configure --prefix=/usr \
-        --build=$BUILD --host=$TARGET \
+        --build=$UNIQUE_BUILD --host=$TARGET \
         ${GLIBC_EXTRA_CONFIG} ${DEFAULT_GLIBC_EXTRA_CONFIG} \
         --without-cvs --disable-profile --disable-debug --without-gd \
         $SHARED_MODE \
-        --enable-add-ons${GLIBC_ADDON_OPTIONS} --with-headers=$HEADERDIR
+        --enable-add-ons${GLIBC_ADDON_OPTIONS} --with-headers=$HEADERDIR \
+        --cache-file=config.cache
 fi
 
 if grep -l '^install-lib-all:' ${GLIBC_DIR}/Makerules > /dev/null; then

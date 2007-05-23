@@ -3,6 +3,26 @@ Note: a description of why each patch is needed is embedded
 for more info.
 
 0.44-pre:
+    gcc:
+    * add gcc-4.1.2 final
+    * add glibc-2.4 + nptl
+    * add glibc-2.5 + nptl
+
+    crosstool.sh:
+    This change is due to the changes in new glibc, glibc-2.4 and later.
+    * Adopted the patch from Khem Raj <kraj at mvista dot com>,
+    http://sourceware.org/ml/crossgcc/2006-12/msg00076.html which makes the
+    gcc-core build in 3 steps, with minor changes when NPTL is turned on. Before,
+    the steps are 1) build-gcc-core only static libraries, 2) build-glibc,
+    3) build-gcc. Since new glibc, 2.4 and newer, requires libgcc_eh
+    from gcc libraries, which is build only when gcc is configured with
+    --enable-shared. However, if gcc is configured with --enable-shared,
+    it needs crti.o and crtn.o that are from glibc. So now, we need
+    more steps like what Khem Raj did: 1) build-gcc-core-static;
+    2) build-glibc-start-files, which are crt[in].o and copy them
+    to ${SYSROOT}/lib/ and ${SYSROOT}/usr/lib/ directories; 3)
+    build-gcc-core-shared; 4) build-glibc; 5) build-gcc.
+
     crosstool.spec.in:
     buildsrpms.sh:
     * add __PKGRELEASE__ to allow users to specify the build number of
