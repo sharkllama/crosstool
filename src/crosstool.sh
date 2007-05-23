@@ -698,6 +698,11 @@ if test '!' -z "${GLIBC_ADDON_NPTL}"; then
         make all-libcpp
         make all-build-libiberty
     fi
+    # HACK: gcc-4.2 has uses libdecnumber to build libgcc.mk, so build it here.
+    if test -d ${GCC_DIR}/libdecnumber; then
+      make configure-libdecnumber
+      make -C libdecnumber libdecnumber.a
+    fi
     make -C gcc libgcc.mk
 
     if test '!' -f gcc/libgcc.mk-ORIG ; then cp -p gcc/libgcc.mk gcc/libgcc.mk-ORIG; fi
