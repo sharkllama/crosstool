@@ -1,0 +1,5 @@
+# fake log file. buildsrpms.sh needs these lines.
+toolchain=PASS
+kernel=PASS
+gdb=PASS
+gdbserver=FAIL
