@@ -33,8 +33,12 @@ if test "${CYGWIN_DIR}" = ""; then
   test -z "${LINUX_SANITIZED_HEADER_DIR}" && echo "Not downloading linux-libc-headers. Set LINUX_SANITIZED_HEADER_DIR to do so"
   test -z "${LINUX_DIR}"        && echo "Not downloading kernel sources. Set LINUX_DIR if you want to do so"
   # And one is derived if not set explicitly.
-  test -z "${GLIBCTHREADS_FILENAME}" &&
-  GLIBCTHREADS_FILENAME=`echo $GLIBC_DIR | sed 's/glibc-/glibc-linuxthreads-/'`
+  if test -z "${GLIBCTHREADS_FILENAME}" ; then
+    # glibc-2.4 has no linuxthreads
+    if test "x$GLIBC_DIR" != "xglibc-2.4" && test $GLIBC_ADDON_OPTIONS != "=nptl" ; then
+      GLIBCTHREADS_FILENAME=`echo $GLIBC_DIR | sed 's/glibc-/glibc-linuxthreads-/'`
+    fi
+  fi
 fi
 
 test -z "${TARBALLS_DIR}"     && abort "Please set TARBALLS_DIR to the directory to download tarballs to."
@@ -270,11 +274,13 @@ if test "${CYGWIN_DIR}" = ""; then
 	http://ep09.pld-linux.org/~mmazur/linux-libc-headers/${LINUX_SANITIZED_HEADER_DIR}.tar.bz2 \
 	ftp://ftp.lfs-matrix.net/pub/linux-libc-headers/${LINUX_SANITIZED_HEADER_DIR}.tar.bz2
   # Glibc addons must come after glibc
+  if test '!' -z "${GLIBCTHREADS_FILENAME}" ; then
   getUnpackAndPatch     \
        ftp://ftp.gnu.org/pub/gnu/glibc/$GLIBCTHREADS_FILENAME.tar.bz2 \
        ftp://ftp.gnu.org/pub/gnu/glibc/$GLIBCTHREADS_FILENAME.tar.gz \
        ftp://gcc.gnu.org/pub/glibc/releases/$GLIBCTHREADS_FILENAME.tar.bz2 \
        ftp://gcc.gnu.org/pub/glibc/releases/$GLIBCTHREADS_FILENAME.tar.gz 
+  fi
 
   test x$GLIBCCRYPT_FILENAME = x || getUnpackAndPatch     ftp://ftp.gnu.org/pub/gnu/glibc/$GLIBCCRYPT_FILENAME.tar.gz ftp://ftp.gnu.org/pub/gnu/glibc/$GLIBCCRYPT_FILENAME.tar.bz2
 fi
