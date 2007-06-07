@@ -28,6 +28,14 @@ for more info.
     * add __PKGRELEASE__ to allow users to specify the build number of
       rpms. The default value is 1.
 
+    ptxdist:
+    * upgrade to ptxdist-0.10.6
+    * add patch for ptxdist-0.10.6 that is used to builduserland
+
+    crosstest:
+    * update crosstest.sh and getandpatch.sh for ptxdist-0.10.6
+    * add docs for rsh/rlogin/rcp tricks
+
 0.43:
     gcc:
     * add gcc-4.1.1 final

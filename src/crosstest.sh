@@ -28,6 +28,9 @@ test -z "${TARGET}"         && abort "Please set TARGET to the Gnu target identi
 test -z "${TARGET_CFLAGS}"  && abort "Please set TARGET_CFLAGS to any compiler flags needed when building glibc (-O recommended)"
 test -z "${TOP_DIR}"        && abort "Please set TOP_DIR to where the crosstool scripts live"
 
+JAILUSER="jailroot"
+JAILHOME=
+
 if test -z "${DEJAGNU}"; then
     DEJAGNU=$TOP_DIR/boards/master.exp
     export DEJAGNU
@@ -64,10 +67,12 @@ set myboard \$target_triplet
 set target_list [list \$target_triplet]
 _EOF_
 
+# Assume that remote test environment for $TARGET is at hostname $TARGET
+REMOTE=$TARGET
 cat > $TOP_DIR/boards/$TARGET.exp <<_EOF_
 load_generic_config "unix";
-set_board_info hostname $TARGET
-set_board_info username root-jail
+set_board_info hostname $REMOTE
+set_board_info username $JAILUSER
 # Note: compiler paths must point into gcc build directory, or g++ regression tests will fail strangely
 set_board_info compiler $BUILD_DIR/build-gcc/gcc/xgcc
 set_board_info c++compiler $BUILD_DIR/build-gcc/gcc/xg++
@@ -83,25 +88,23 @@ _EOF_
 # (Note: you can skip this if you're only testing static executables)
 cd $BUILD_DIR
 
-# Assume that remote test environment for $TARGET is at hostname $TARGET
-REMOTE=$TARGET
 rm -rf jail_etc_passwd || true
-rcp root@$REMOTE:/jail/etc/passwd jail_etc_passwd
-if test -x $BUILD_DIR/ptxdist-0.3.23/root/bin/busybox; then
+rcp root@$REMOTE:$JAILHOME/jail/etc/passwd jail_etc_passwd
+if test -x $BUILD_DIR/ptxdist-0.10.6/root/bin/busybox; then
 	echo Grabbing busybox from ptxdist
-	sh $TOP_DIR/mkjail.sh $PREFIX/$TARGET jail_etc_passwd $BUILD_DIR/ptxdist-0.3.23/root
+	sh $TOP_DIR/mkjail.sh $PREFIX/$TARGET jail_etc_passwd $BUILD_DIR/ptxdist-0.10.6/root
 else
 	sh $TOP_DIR/mkjail.sh $PREFIX/$TARGET jail_etc_passwd
 fi
 # Transfer and install the chroot environment
 rcp $TOP_DIR/initjail.sh root@$REMOTE:
 # Run initjail script.  Sadly, exit status of initjail.sh does not propagate.
-zcat jail.tar.gz | rsh -l root $REMOTE /bin/sh initjail.sh /jail
+zcat jail.tar.gz | rsh -l root $REMOTE /bin/sh initjail.sh $JAILHOME/jail
 # Verify that initjail script ran (it won't if rm -rf failed because
 # .nfsXXXX files are laying about,
 # as when some app or shared library we're deleting is in use).
 # by copying file that should exist.  If it doesn't, we abort.
-rcp root@$REMOTE:/jail/lib/libm.so /tmp/bogus_libm.so.$$
+rcp root@$REMOTE:$JAILHOME/jail/lib/libm.so /tmp/bogus_libm.so.$$
 rm /tmp/bogus_libm.so.$$
 
 # Remove prior run's logfiles
@@ -141,6 +144,10 @@ cat make.out \
     | sed "/^cd /s/'\$//" \
     | grep -v '/bin/sh' \
     | sed 's/^cd \(.*\)/mkdir -p \1; cd \1/' \
+    | sed 's/; ulimit -s 1023;//' \
+    | sed "s/\(.*\) \(\/[^\/]*\)\(.*\)\(\/[^\w\/]*\) \([^/]*\.tests\)/\1 \2\3\4 \/${GLIBC_DIR}\3\/\5/" \
+    | sed "s/\(.*\) \(\/[^\/]*\)\(.*\)\(\/[^\w\/]*\) \(.* cmp .*\) \([^/]*\.expect\)/\1 \2\3\4 \5 \/${GLIBC_DIR}\3\/\6/" \
+    | sed 's/>& /> /' \
     | sed 's/$/|| echo Error $?/' \
     > ../tests.out
 
@@ -156,15 +163,19 @@ REST=`echo $BUILD_DIR | sed 's,$TOP_DIR/,,'`
 echo "(cd $TOP_DIR; mkdir -p $REST; ln -s /build-glibc $REST/build-glibc)" >> ../glibctest.sh
 
 # For some reason, several dlfcn and elf tests don't pass without LD_LIBRARY_PATH
-echo "LD_LIBRARY_PATH=../../build-glibc/elf:../../build-glibc/dlfcn; export LD_LIBRARY_PATH" >> ../glibctest.sh
+echo "LD_LIBRARY_PATH=$REMOTE_TOP/build-glibc/elf:$REMOTE_TOP/build-glibc/dlfcn; export LD_LIBRARY_PATH" >> ../glibctest.sh
 cat ../tests.out >> ../glibctest.sh
 
 # Grab files needed to run tests
 cd ..
 TESTPROGRAMS=`grep = tests.out | sed 's/[A-Z_]*=[^ ]* *//g;s/ .*//' | sort -u | sed "s,$REMOTE_TOP/,,"`
 INPUTFILES="glibc*/*/*.input glibc*/stdio-common/xbug.c glibc*/io/Makefile glibc*/io/bug-ftw2.c"
-TESTLIBS=`ls build-glibc/elf/*.so build-glibc/dlfcn/*.so | grep -v ld.so`
-tar -czf test.tar.gz glibctest.sh $TESTPROGRAMS $INPUTFILES $TESTLIBS
+TESTLIBS=`ls build-glibc/elf/*.so build-glibc/dlfcn/*.so build-glibc/stdlib/*.so build-glibc/nptl/*.so | grep -v ld.so`
+TESTDATA=`ls build-glibc/iconvdata/*`
+TESTFILES=`grep "\.tests" tests.out | sed 's/.* \(.*\.tests\) .*/\1/' | sed "s,$REMOTE_TOP/,,"`
+GOLDENFILES=`grep "\.expect" tests.out | sed 's/.* \(.*\.expect\) .*/\1/' | sed "s,$REMOTE_TOP/,,"`
+tar -czf test.tar.gz glibctest.sh $TESTPROGRAMS $INPUTFILES $TESTLIBS $TESTDATA $TESTFILES $GOLDENFILES
+
 # Strip the executables we're going to send to the target - makes a difference when compiled -g
 rm -rf tmp || true
 mkdir tmp
@@ -177,12 +188,12 @@ cd ..
 rm -rf tmp
 
 # Transfer to target system and run.  
-rsh -n -l root-jail $REMOTE rm -rf build-glibc
-cat test.tar.gz | rsh -l root-jail $REMOTE tar -xzf -
-rsh -n -l root-jail $REMOTE sh -e glibctest.sh > glibctest.out 2>&1
+rsh -n -l root $REMOTE "rm -rf $REMOTE_TOP/build-glibc; rm -rf $REMOTE_TOP/glibc-*"
+cat test.tar.gz | rsh -l $JAILUSER $REMOTE "tar -xzf -; mv build-glibc $REMOTE_TOP/; mv glibc-* $REMOTE_TOP/"
+rsh -n -l $JAILUSER $REMOTE "sh -e glibctest.sh" > glibctest.out 2>&1
 
 if grep Error glibctest.out; then
-   echo "Some glibc test failed.  Check logfiles on target in /jail/build-glibc/*/*.out."
+   echo "Some glibc test failed.  Check logfiles on target in $JAILHOME/jail/build-glibc/*/*.out."
 fi
 # it's not really a summary yet, but let's copy it up anyway
 cp glibctest.out $TOP_DIR/$TARGET-$GCC_DIR-$GLIBC_DIR.glibc.sum

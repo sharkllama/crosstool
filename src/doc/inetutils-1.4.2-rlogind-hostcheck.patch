@@ -1,0 +1,219 @@
+Wed June 6 2007 Dongmin Zhang <crosstool@gmail.com>
+
+This patch adds the ip address checking that makes rlogind accept only the connections from the
+given ip addresses. The list of allowed IPs should be provided as the commandline options for rlogind.
+It is mandatory for rlogind. Here is an example of xinetd rlogin configure file with a list of
+allowed IP addresses.
+
+service login
+{
+        socket_type     = stream
+        wait            = no
+        cps             = 200 5
+        user            = root
+        log_on_success  += USERID
+        log_on_failer   += USERID
+        server          = /usr/local/libexec/rlogind
+        server_args     = --allow 192.168.0.1/24 -o
+        disable         = no
+}
+
+diff -Nuar inetutils-1.4.2/rlogind/rlogind.c inetutils-1.4.2.new/rlogind/rlogind.c
+--- inetutils-1.4.2/rlogind/rlogind.c	2002-06-25 20:15:06.000000000 -0700
++++ inetutils-1.4.2.new/rlogind/rlogind.c	2007-05-30 17:10:27.000000000 -0700
+@@ -2,6 +2,12 @@
+ 
+    This file is part of GNU Inetutils.
+ 
++   Part of host checking code is copied from distcc-2.18.3, which has the following copyright.
++
++   Copyright (C) 2003 by Martin Pool <mbp@samba.org>
++
++   http://distcc.samba.org/
++
+    GNU Inetutils is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2, or (at your option)
+@@ -149,9 +155,10 @@
+ #endif
+ };
+ 
+-static const char *short_options = "aD::d::hk::L:lnp:orxV";
++static const char *short_options = "aD::d::hi:k::L:lnp:orxV";
+ static struct option long_options[] =
+ {
++  {"allow", required_argument, 0, 'i'},
+   {"allow-root", no_argument, 0, 'o'},
+   {"verify-hostname", no_argument, 0, 'a'},
+   {"daemon", optional_argument, 0, 'd'},
+@@ -168,6 +175,22 @@
+   {0, 0, 0, 0}
+ };
+ 
++/* Added for IP checking */
++struct dcc_allow_list {
++    in_addr_t           addr, mask;
++    struct dcc_allow_list *next;
++};
++
++struct dcc_allow_list *opt_allowed = NULL;
++static const in_addr_t allones = 0xffffffffUL;
++
++enum opt_exitcode {
++  EXIT_OUT_OF_MEMORY   = 100,
++  EXIT_BAD_ARGUMENTS    = 101,
++  EXIT_ACCESS_DENIED    = 102
++};
++
++
+ int allow_root = 0;
+ int verify_hostname = 0;
+ int keepalive = 1;
+@@ -242,6 +265,109 @@
+ # define ENC_WRITE(c, fd, buf, size) c = write (fd, buf, size)
+ #endif
+ 
++/**
++ * Interpret a "HOST/BITS" mask specification.  Return @p value and @p mask.
++ **/
++int dcc_parse_mask(const char *spec,
++                   in_addr_t *value,
++                   in_addr_t *mask)
++{
++    int value_len;
++    struct in_addr ia;
++    int mask_bits;
++    char *value_str;
++    int matched;
++    const char *mask_str;
++
++    value_len = strcspn(spec, "/");
++
++    /* get bit before slash */
++    value_str = strdup(spec);
++    value_str[value_len] = '\0';
++    matched = inet_aton(value_str, &ia);
++
++    /* extract and parse value part */
++    if (!matched) {
++        printf(" rlogind: parse_mask can't parse internet address \"%s\"", value_str);
++        free(value_str);
++        return EXIT_BAD_ARGUMENTS;
++    }
++    free(value_str);
++    *value = ia.s_addr;
++
++    mask_str = &spec[value_len + 1];
++    if (spec[value_len] && *mask_str) {
++        /* find mask length as a number of bits */
++        mask_bits = atoi(mask_str);
++        if (mask_bits < 0 || mask_bits > 32) {
++            printf(" rlogind: invalid mask \"%s\"", mask_str);
++            return EXIT_BAD_ARGUMENTS;
++        }
++
++        /* Make a network-endian mask with the top mask_bits set.  */
++        if (mask_bits == 32)
++            *mask = allones;
++        else
++            *mask = htonl(~(allones >> mask_bits));
++    } else {
++        *mask = allones;
++    }
++    return 0;
++}
++
++int parse_allow_ips(char* ip_and_mask) {
++  /* TODO: Allow this to be a hostname, which is resolved to an address. */
++  /* TODO: Split this into a small function. */
++  int exitcode;
++  struct dcc_allow_list *newal;
++  newal = malloc(sizeof *newal);
++  if (!newal) {
++     printf(" rlogind: malloc failed");
++     exitcode = EXIT_OUT_OF_MEMORY;
++     return exitcode;
++  }
++  newal->next = opt_allowed;
++  opt_allowed = newal;
++  if ((exitcode = dcc_parse_mask(ip_and_mask, &newal->addr, &newal->mask)))
++    return exitcode;
++
++}
++
++/**
++ * Check whether a client ought to be allowed.
++ *
++ * @returns 0 for allowed, or EXIT_ACCESS_DENIED.
++ **/
++int dcc_check_one_address(in_addr_t client,
++                          in_addr_t value,
++                          in_addr_t mask)
++{
++    if ((client & mask) == (value & mask)) {
++        printf(" rlogind: match client %#lx, value %#lx, mask %#lx\n",
++                 (long) client, (long) value, (long) mask);
++        return 0;
++    } else {
++        printf(" rlogind: deny client %#lx, value %#lx, mask %#lx\n",
++                 (long) client, (long) value, (long) mask);
++        return EXIT_ACCESS_DENIED;
++    }
++}
++
++int check_address(struct in_addr ia, struct dcc_allow_list *allowed) {
++  struct dcc_allow_list *l;
++  int ret;
++
++  for (l = allowed; l; l = l->next) {
++    if ((ret = dcc_check_one_address(ia.s_addr, l->addr, l->mask)) == 0)
++      break;
++  }
++
++  if (ret != 0)
++    printf(" rlogind: connection denied by access list.\n");
++
++  return ret;
++}
++
+ int
+ main (int argc, char *argv[])
+ {
+@@ -271,6 +397,11 @@
+ 	  if (maxchildren == 0)
+ 	    maxchildren = DEFMAXCHILDREN;
+ 	  break;
++        
++        case 'i':
++          if (optarg)
++            parse_allow_ips(optarg);
++          break;
+ 
+ 	case 'l':
+ 	  __check_rhosts_file = 0; /* FIXME: extern var? */
+@@ -327,6 +458,12 @@
+ 	}
+     }
+ 
++  if (!opt_allowed) {
++    printf(" rlogind: --allow option is now mandatory;"
++           "you must specify which clients are allowed to connect.\n");
++    return -1;
++  }
++
+   openlog ("rlogind", LOG_PID | LOG_CONS, LOG_AUTH);
+   argc -= optind;
+   if (argc > 0)
+@@ -473,6 +610,12 @@
+ 
+   confirmed = 0;
+ 
++  /* Check if the remote ip address is allowed */
++   if (check_address(ap->from.sin_addr, opt_allowed)) {
++      printf("ip is denied\n");
++      exit(0);
++    }
++
+   /* Check the remote host name */
+   hp = gethostbyaddr ((char *) &ap->from.sin_addr, sizeof (struct in_addr),
+ 		      ap->from.sin_family);

@@ -1,0 +1,54 @@
+Wed June 6 2007 Dongmin Zhang <crosstool@gmail.com>
+
+This patch removes some of the security features from rlogind and rshd.
+
+rlogind by default uses PAM authentication. So when you rlogin as different user, it
+asks the password. To make the prompt for password go away, the authentication
+is removed from rlogind.
+
+In order to be able to really run command remotely with rsh without password
+when the remote user and local user are different, we removed the iuserok check
+from rshd.
+
+diff -Nuar inetutils-1.4.2/rlogind/rlogind.c inetutils-1.4.2.new/rlogind/rlogind.c
+--- inetutils-1.4.2/rlogind/rlogind.c	2002-06-25 20:15:06.000000000 -0700
++++ inetutils-1.4.2.new/rlogind/rlogind.c	2007-06-06 15:38:49.000000000 -0700
+@@ -569,7 +569,9 @@
+ 
+   IF_ENCRYPT (des_write (fd, SECURE_MESSAGE, sizeof (SECURE_MESSAGE) - 1));
+ 
+-  return authenticated;
++  /* DANGER -- remove all authentication */
++  return 1;
++  /* return authenticated; */
+ }
+ 
+ void
+diff -Nuar inetutils-1.4.2/rshd/rshd.c inetutils-1.4.2.new/rshd/rshd.c
+--- inetutils-1.4.2/rshd/rshd.c	2002-12-11 04:38:00.000000000 -0800
++++ inetutils-1.4.2.new/rshd/rshd.c	2007-06-06 15:44:07.000000000 -0700
+@@ -461,7 +461,8 @@
+ #ifdef	KERBEROS
+       if (!use_kerberos)
+ #endif
+-	if (check_all || local_domain (hp->h_name))
++	//if (check_all || local_domain (hp->h_name))
++        if (check_all)
+ 	  {
+ 	    char *remotehost = (char *) alloca (strlen (hp->h_name) + 1);
+ 	    if (! remotehost)
+@@ -581,9 +582,11 @@
+     }
+   else
+ #endif
+-    if (errorstr || pwd->pw_passwd != 0 && *pwd->pw_passwd != '\0'
+-	&& (iruserok (fromp->sin_addr.s_addr, pwd->pw_uid == 0,
+-		      remuser, locuser)) < 0)
++    /* Don't check if the remote user is the same as local user */
++    /* if (errorstr || pwd->pw_passwd != 0 && *pwd->pw_passwd != '\0'
++	&& ( iruserok (fromp->sin_addr.s_addr, pwd->pw_uid == 0,
++		      remuser, locuser)) < 0) */
++    if (errorstr)
+       {
+ 	if (__rcmd_errstr)
+ 	  syslog (LOG_INFO|LOG_AUTH,

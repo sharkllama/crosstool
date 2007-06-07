@@ -1,0 +1,40 @@
+Wed June 6 2007 Dongmin Zhang <crosstool@gmail.com>
+
+This patch fixed some compile errors in inetutils-1.4.2.
+
+diff -uar inetutils-1.4.2/ftp/extern.h inetutils-1.4.2.new/ftp/extern.h
+--- inetutils-1.4.2/ftp/extern.h	2000-08-08 22:44:23.000000000 -0700
++++ inetutils-1.4.2.new/ftp/extern.h	2007-04-19 17:30:46.000000000 -0700
+@@ -137,7 +137,7 @@
+ 
+ extern jmp_buf	abortprox;
+ extern int	abrtflag;
+-extern struct	cmd cmdtab[];
++/*extern struct	cmd cmdtab[];*/
+ extern FILE	*cout;
+ extern int	data;
+ extern char    *home;
+diff -uar inetutils-1.4.2/ftp/main.c inetutils-1.4.2.new/ftp/main.c
+--- inetutils-1.4.2/ftp/main.c	2002-06-25 20:15:05.000000000 -0700
++++ inetutils-1.4.2.new/ftp/main.c	2007-04-19 17:30:46.000000000 -0700
+@@ -61,6 +61,7 @@
+ 
+ /* basename (argv[0]).  NetBSD, linux, & gnu libc all define it.  */
+ extern char *__progname;
++extern struct cmd cmdtab[];
+ 
+ #define DEFAULT_PROMPT "ftp> "
+ static char *prompt = 0;
+diff -uar inetutils-1.4.2/libinetutils/ttymsg.c inetutils-1.4.2.new/libinetutils/ttymsg.c
+--- inetutils-1.4.2/libinetutils/ttymsg.c	2001-11-01 07:52:19.000000000 -0800
++++ inetutils-1.4.2.new/libinetutils/ttymsg.c	2007-04-19 17:30:46.000000000 -0700
+@@ -132,7 +132,8 @@
+ 	    }
+ 	  if (wret)
+ 	    {
+-	      (char *)iov->iov_base += wret;
++	      /* (char *)iov->iov_base += wret; */
++	      iov->iov_base += wret;
+ 	      iov->iov_len -= wret;
+ 	    }
+ 	  continue;

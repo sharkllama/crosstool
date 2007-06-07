@@ -1,0 +1,37 @@
+Wed June 6 2007 Dongmin Zhang <crosstool@gmail.com>
+
+rsh doesn't will be confused if there is "-something" in the command. For
+example, if you run "rsh -n -l jailroot ls -a", rsh will be confused by "-a".
+It thinks "-a" is an option for rsh. This type of commands are widely used
+by Dejagnu when it runs gcc regression test. Gcc regression test may fail
+to run due to this rsh problem. There is a patch fixed this problem by assuming
+that -l is the last option in rsh and it is followed by the hostname. This
+assumption works fine with Dejagnu gcc regression test set up.
+
+--- inetutils-1.4.2/rsh/rsh.c	2002-06-25 20:15:06.000000000 -0700
++++ inetutils-1.4.2.new/rsh/rsh.c	2007-05-16 15:13:29.000000000 -0700
+@@ -208,6 +208,7 @@
+   pid_t pid = 0;
+   uid_t uid;
+   char *args, *host, *user;
++  int end_of_opt = 0;
+ 
+ #ifndef HAVE___PROGNAME
+   extern char *__progname;
+@@ -230,7 +231,7 @@
+       asrsh = 1;
+   }
+ 
+-  while ((ch = getopt_long (argc, argv, short_options, long_options, 0))
++  while (!end_of_opt && (ch = getopt_long (argc, argv, short_options, long_options, 0))
+ 	 != EOF)
+     {
+       switch (ch)
+@@ -247,6 +248,7 @@
+ 
+ 	case 'l':
+ 	  user = optarg;
++          end_of_opt = 1;
+ 	  break;
+ 
+ 	case 'K':

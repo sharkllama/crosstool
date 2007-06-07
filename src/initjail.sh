@@ -36,7 +36,7 @@ mknod random c 1 8
 chmod 666 *
 cd ..
 
-if test -x /bin/busybox ; then
+if test -x $JAIL/bin/busybox ; then
 	PROGS="rcp busybox"
 else
 	PROGS="true ln ls rm mv cp su rcp"
@@ -55,11 +55,15 @@ for prog in $PROGS; do
 done
 test -f $JAIL/bin/ash && ln -s ash $JAIL/bin/sh
 
-sed 's,/sbin/chrootshell,/bin/sh,;s,/jail,/,' < /etc/passwd  >  $JAIL/etc/passwd
+# Assume that there is only one jail user
+JAILUSER=`grep jail /etc/passwd | sed 's/\([^:]\):.*/\1/'`
+
+sed 's,/sbin/chrootshell,/bin/sh,;s,:/.*/jail,:/home,' < /etc/passwd  >  $JAIL/etc/passwd
 
 test -f /etc/shadow && cp /etc/shadow       $JAIL/etc
 cp /etc/group        $JAIL/etc
 cp /etc/services     $JAIL/etc
+chown -R $JAILUSER *
 if [ -d /etc/pam.d ]; then
 	cp -r /etc/pam.d      $JAIL/etc
 	cp -r /lib/libpam*    $JAIL/lib
