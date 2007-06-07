@@ -1,0 +1,137 @@
+<html>
+<head><title>rsh tricks</title></head>
+<body>
+Here are some tricks makes "rsh -l jailuser target ls" work.
+<p>
+
+<h2>1. Download the working rsh/rlogin/rcp</h3>
+Download it from  ftp://ftp.gnu.org/gnu/inetutils/inetutils-1.4.2.tar.gz (see
+<a href="chroot-login-howto.html">chroot login how-to</a>). Getting the correct
+version is very important. I once downloaded a package from a random place and
+spend a whole day couldn't figure out how to make it work. This version works
+like a charm.
+
+<p>
+<h2>2. Remove all the security features of rshd/rlogind.</h3>
+<h3>2.1. Enable rlogin as root.</h3>
+rlogind by default doesn't allow login as root. You need to pass "-o" to the rlogind to make it happen. I used xinetd in my virtual ubuntu box. Here is the configure file for rlogin
+
+<p>
+<pre>
+service login
+{
+    sockt_type      = stream
+    wait            = no
+    cps             = 200 5
+    user            = root
+    log_on_success  += USERID
+    log_on_failuer  += USERID
+    server          = /usr/local/libexec/rlogind
+    server_args     = -o
+    disable         = no
+}
+</pre>
+
+<p>
+And here is my rsh configure file:
+<p>
+<pre>
+service shell
+{
+    socket_type     = stream
+    wait            = no
+    user            = root
+    log_on_success  += USERID
+    log_on_failuer  += USERID
+    server          = /usr/local/libexec/rshd
+    disable         = no
+}
+</pre>
+<p>
+
+and they both go to /etc/xinetd.d. Don't forget to restart xinetd, "/etc/init.d/xinetd restart".
+
+<h3>2.2. Enable rlogin as another user without providing password.</h3>
+<p>
+rlogind by default uses PAM authentication. So when you rlogin as different user, it asks the password. To make the prompt for password go away, you need to change one line in rlogind.c: line 572 to 
+
+<pre>
+  return 1;
+</pre>
+<p>
+<p>
+Now you should be able to run 
+<pre>
+rsh -l jailuser target
+</pre>
+
+<h3>2.3. Enable rsh as another user without providing password.</h3>
+<p>
+This only makes you be able to "rsh -l jailuser target" without providing password. In order to be able to really run command remotely with rsh without password, the same trick needs to be done in rshd. Change line 587-589
+
+<p>
+<pre>
+  if (errorstr || pwd->pw_passwd != 0 && *pwd->pw_passwd != '\0'
+     && ( iuserok (fromp->sin_addr.s_addr, pwd->pw_uid == 0,
+     remuser, locuser)) < 0)
+</pre>
+
+<p>
+to
+
+<p>
+<pre>
+  if (errorstr)
+</pre>
+
+<p>
+In the original code, it calls iruserok, which always returns -1 when remote
+user and local user are different. By changing this line, we skip checking if iruserok returns -1.
+<p>
+You can also apply <a href="inetutils-1.4.2-insecure.patch">inetutils-1.4.2-insecure.patch</a> which does 2.2 and 2.3 for you. 
+
+<h3>2.4. Add client IP address check.</h3>
+Since we removed all the security features from rshd/rlogind, we'd better
+limit the access to a few IP addresses we trust. <a href="inetutils-1.4.2-rlogind-hostcheck.patch">inetutils-1.4.2-rlogind-hostcheck.patch</a> added the IP
+address check. The list of allowed IPs should be provided as the commandline
+options for rlogind. It is mandatory for rlogind. Here is an example of
+xinetd rlogin configure file with a list of allowed IP addresses.
+<p>
+<pre>
+service login
+{
+        socket_type     = stream
+        wait            = no
+        cps             = 200 5
+        user            = root
+        log_on_success  += USERID
+        log_on_failer   += USERID
+        server          = /usr/local/libexec/rlogind
+        server_args     = --allow 192.168.0.1/24 -o
+        disable         = no
+}
+</pre>
+
+<h3>2.5. rsh doesn't understand your command if there is "-something" in the
+  command.</h3>
+<p>For example, if you run "rsh -n -l jailroot ls -a", rsh will be confused by
+"-a". It thinks "-a" is an option for rsh. This type of commands are widely used by Dejagnu when
+it runs gcc regression test. Gcc regression test may fail to run due to
+this rsh problem. There is a patch for rsh.c in
+ <a href="inetutils-1.4.2-rsh-command-option.patch">inetutils-1.4.2-rsh-command-option.patch</a> that assumes -l is the last
+ option in rsh and it is followed by the hostname. This assumption works fine
+ with Dejagnu gcc regression test set up.
+<h3>2.6. Misc</h3>
+One last thing you may have trouble with is that if your rsh client is not
+installed as root, you need to chown rsh to root and set SUID bit "chmod u+s
+rsh", otherwise, rcmd will fail since it requires to be run as root.
+<p>Now you should be able to run 
+<pre>
+rsh -l jailuser target ls
+</pre>
+<p>
+Copyright 2007, Dongmin Zhang for Google Inc.<br>
+Released under the GPL.<br>
+Last revision 30 May 2007 by crosstool@gmail.com
+</body>
+</html>

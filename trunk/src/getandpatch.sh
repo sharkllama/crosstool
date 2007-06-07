@@ -194,7 +194,9 @@ test -z "${JUST_DOWNLOAD}" || mkdir -p $SRC_DIR
 
 # Grab it if we want to build userland...
 if test -n "$PTXDIST_DIR" ; then
-   getUnpackAndPatch http://www.kegel.com/crosstool/$PTXDIST_DIR.tar.gz
+    VER=`echo $PTXDIST_DIR | sed 's/ptxdist-\([0-9]*\.[0-9]*\)\..*/v\1/'`
+    getUnpackAndPatch http://www.pengutronix.de/software/ptxdist/download/${VER}/${PTXDIST_DIR}.tgz
+    getUnpackAndPatch http://www.pengutronix.de/software/ptxdist/download/${VER}/${PTXDIST_DIR}-patches.tgz
 fi
 
 if test -n "$GDB_DIR"; then

@@ -15,9 +15,8 @@ BUILD_DIR=$TOP_DIR/build/$TARGET/$TOOLCOMBO
 
 TARBALLS_DIR=${TARBALLS_DIR-$TOP_DIR/tarballs}
 RESULT_TOP=${RESULT_TOP-$TOP_DIR/result}
-PREFIX=${PREFIX-$RESULT_TOP/$TOOLCOMBO/$TARGET}
 
-PATH="$PREFIX/bin:$PATH"
+PATH="${BUILD_DIR}/${PTXDIST_DIR}/bin:$PATH"
 export PATH
 
 cd $BUILD_DIR/$PTXDIST_DIR
@@ -28,16 +27,20 @@ rm -rf src
 ln -s $TARBALLS_DIR src
 
 # pull in a config file that all the bits we want...
-cp $TOP_DIR/ptx.config .config
-# and point it at our already-compiled toolchain 
-export PREFIX
-sh scripts/settoolchain.sh 
+cp $TOP_DIR/ptx.config ptxconfig
+# PREFIX has to be unset here, otherwise ptxdist configure will pick it up and
+# generate wrong make file
+PREFIX=
+# build ptxdist
+./configure
+make
 
-make get
-make extract
-yes '' | make prepare
-make compile
-make install
+# and point it at our already-compiled toolchain 
+ptxdist toolchain ${CROSSTOOLTOP}/${TOOLCOMBO}/${TARGET}/bin
+ptxdist go
+
+PREFIX=$RESULT_TOP/$TOOLCOMBO/$TARGET
+export PREFIX
 
 # OK, system image in $PREFIX/target
 # Pull in standard C libraries and binaries from $PREFIX/$TARGET

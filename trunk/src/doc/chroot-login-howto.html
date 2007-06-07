@@ -49,6 +49,8 @@ $ su
 # zcat jail.tar.gz | sh initjail.sh myjail
 </pre>
 
+If we copy binaries from the local machine, we might have to also copy some shared libraries as most of the binaries are now dynamically linked. In order to keep the shared library from being copied from your local machine, you can setup busybox and use the commonly used commands, such as "ash" and "ls", from busybox. Please refer to initjail.sh for more details about how to setup busybox.
+
 <h3>1.2. Testing the Jail</h3>
 Once you have the jail set up, test it by hand using the /usr/sbin/chroot program
 to run a shell inside the jail, e.g.
@@ -219,13 +221,13 @@ If your system is using PAM, you may need to add entries in /etc/pam.d for rsh a
 You probably need to add entries either to the systemwide /etc/hosts.equiv file
 (see 'man hosts.equiv') or the per-user .rhosts file (see 'man rhosts').
 
-<h3>3.2. Testing and Troubleshooting rsh</h3>
+<h3>3.3. Testing and Troubleshooting rsh</h3>
 First, verify you can run 'ls' remotely without the jail.
 Assuming the target system's hostname is 'target',
 and assuming you have an account with the same name on both systems,
 give the following command on your workstation:
 <pre>
-$ rsh target ls
+$ rsh -l jailuser target ls
 </pre>
 If this doesn't work, look at the most recently modified files in the target's /var/log directory
 for interesting error messages.  If that doesn't explain the problem,
@@ -235,6 +237,9 @@ opening -- maybe it's not looking where you expected for security info.
 (This requires modifying /etc/inetd.conf to invoke <tt>strace -o /tmp/strace.log /bin/rshd</tt>
 instead of just <tt>/bin/rshd</tt>.)
 When all else fails, you could build rsh from source and step through it in the debugger.
+<p>
+Please refer to <a href="rsh-tricks.html">rsh tricks</a> for more help.
+
 <p>
 Once that's working, verify that you can spawn 200 commands in quick succession, e.g.
 <pre>
@@ -250,13 +255,15 @@ poll: protocol failure in circuit setup
 </pre>
 around the 40th iteration, then you may need to edit /etc/inetd.conf and add .1000
 to the end of the 'nowait' keyword (or edit /etc/xinit.d/rsh and add the cps parameter...) 
-as described above.
+as described above. If this doesn't work for you, you may want to patch your
+inetd as shown in <a href="inetutils-1.4.2-inetd-many-connections.patch">inetutils-1.4.2-inetd-many-connections.patch</a> that allows your inetd spawn more
+than 40 jobs/minute.
 
-<h3>3.3. Testing rlogin</h3>
+<h3>3.4. Testing rlogin</h3>
 Verify you can get a remote shell with either the command 'rlogin target' (or its synonym 'rsh target';
 rsh invokes rlogin if it's run without a command).
 
-<h3>3.4. Testing rcp</h3>
+<h3>3.5. Testing rcp</h3>
 Verify you can copy files to the target system using rcp, e.g.
 <pre>
 rcp /etc/hosts target:
@@ -316,7 +323,9 @@ by Terry J. White and Brian Rhodes.
 </ul>
 
 <p>
-Copyright 2003, Ixia Communications.  Released under the GPL.<br>
-Last revision 26 August 2003 by dkegel@ixiacom.com
+Copyright 2003, Dan Kegel for Ixia Communications.<br>
+Copyright 2007, Dongmin Zhang for Google Inc.<br>
+Released under the GPL.<br>
+Last revision 30 May 2007 by crosstool@gmail.com
 </body>
 </html>

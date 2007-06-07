@@ -1,0 +1,11 @@
+--- ptxdist-0.10.6/configure	2007-01-28 13:19:39.000000000 -0800
++++ ptxdist-0.10.6.new/configure	2007-03-26 11:15:09.000000000 -0700
+@@ -4624,7 +4624,7 @@
+ 
+ { echo "$as_me:$LINENO: checking localedef version" >&5
+ echo $ECHO_N "checking localedef version... $ECHO_C" >&6; }
+-LOCALEDEF_VERSION=`$LOCALEDEF --version 2>/dev/null | $SED -ne "s/.*libc. \([0-9\.]*\)/\1/p"`
++LOCALEDEF_VERSION=`$LOCALEDEF --version 2>/dev/null | $SED -ne "s/localedef (.*) \([0-9\.]*\)/\1/p"`
+ case "$LOCALEDEF_VERSION" in
+ 2.[01]*) { { echo "$as_me:$LINENO: error: we need at least GNU localedef 2.2.x but found $LOCALEDEF_VERSION" >&5
+ echo "$as_me: error: we need at least GNU localedef 2.2.x but found $LOCALEDEF_VERSION" >&2;}
