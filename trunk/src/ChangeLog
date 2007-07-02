@@ -22,6 +22,9 @@ for more info.
     2) build-glibc-start-files, which are crt[in].o and copy them
     to ${SYSROOT}/lib/ and ${SYSROOT}/usr/lib/ directories; 3)
     build-gcc-core-shared; 4) build-glibc; 5) build-gcc.
+    * Use --build instead of --host as a configure option to binutils if
+    binutils uses new autoconf 2.59.
+    * Use local gcc to build glibc-headers for glibc-2.3 and older.
 
     crosstool.spec.in:
     buildsrpms.sh:
@@ -35,6 +38,7 @@ for more info.
     crosstest:
     * update crosstest.sh and getandpatch.sh for ptxdist-0.10.6
     * add docs for rsh/rlogin/rcp tricks
+
 
 0.43:
     gcc:

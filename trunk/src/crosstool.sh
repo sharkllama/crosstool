@@ -216,6 +216,32 @@ case "$GCC_HOST,$CANADIAN_BUILD," in
 *)            GCC_HOST=`echo $GCC_HOST | sed s/-/-host_/` ;;
 esac
 
+# determine if we should use --build or --host for gcc-core and gcc configure
+# binutils.2.17.50 and later uses new autoconf 2.59, which have --build --host --target
+# redefined as following:
+# To quote the autoconf docs:
+#
+# `--build=BUILD-TYPE'
+#    the type of system on which the package is being configured and
+#    compiled.  It defaults to the result of running `config.guess'.
+#
+# `--host=HOST-TYPE'
+#    the type of system on which the package will run.  By default it
+#    is the same as the build machine.  Specifying it enables the
+#    cross-compilation mode.
+#
+# `--target=TARGET-TYPE'
+#    the type of system for which any compiler tools in the package will
+#    produce code (rarely needed).  By default, it is the same as host.
+case `basename ${BINUTILS_DIR}` in
+  binutils-2.17.*)
+    BINUTILS_CONFIG_OPTIONS="--build=$GCC_HOST"
+    ;;
+  *)
+    BINUTILS_CONFIG_OPTIONS="--host=$GCC_HOST"
+    ;;
+esac
+
 # If we're building compilers that run on Windows, remember that their
 # filenames end in .exe
 case "$GCC_HOST" in
@@ -380,7 +406,7 @@ echo Build binutils
 mkdir -p build-binutils; cd build-binutils
 
 if test '!' -f Makefile; then
-    ${BINUTILS_DIR}/configure $CANADIAN_BUILD --target=$TARGET --host=$GCC_HOST --prefix=$PREFIX --disable-nls ${BINUTILS_EXTRA_CONFIG} $BINUTILS_SYSROOT_ARG
+    ${BINUTILS_DIR}/configure $CANADIAN_BUILD --target=$TARGET $BINUTILS_CONFIG_OPTIONS --prefix=$PREFIX --disable-nls ${BINUTILS_EXTRA_CONFIG} $BINUTILS_SYSROOT_ARG
 fi
 
 make $PARALLELMFLAGS all 
@@ -467,11 +493,11 @@ if grep -q 'gcc-[34]' ${GCC_CORE_DIR}/ChangeLog && test '!' -f $HEADERDIR/featur
         # Override libc_cv_ppc_machine so glibc-cvs doesn't complain
         # 'a version of binutils that supports .machine "altivec" is needed'.
         case `basename ${GLIBC_DIR}` in
-          glibc-2.3.*)
-            THECC=gcc
+          glibc-2.[45]*)
+            THECC=${TARGET}-gcc${EXEEXT}
             ;;
           *)
-            THECC=${TARGET}-gcc${EXEEXT}
+            THECC=gcc
             ;;
         esac
 
