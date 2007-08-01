@@ -580,9 +580,9 @@ if grep -q 'gcc-[34]' ${GCC_CORE_DIR}/ChangeLog && test '!' -f $HEADERDIR/featur
                          ;;
             esac
             test ! -f $HEADERDIR/bits/wordsize.h && cp ${GLIBC_DIR}/${wordsize_h} $HEADERDIR/bits/wordsize.h
-            cp ${GLIBC_DIR}/${pthreadtypes_h} $HEADERDIR/bits/pthreadtypes.h
             ;;
         esac
+        cp ${GLIBC_DIR}/${pthreadtypes_h} $HEADERDIR/bits/pthreadtypes.h
     fi # GLIBC_ADDONS_NPTL
 
     cd ..
